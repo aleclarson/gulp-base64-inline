@@ -10,9 +10,9 @@ module.exports = (givenImagesPath, options) =>
     transform(file, _, done) {
       var imagesPath
       if (!givenImagesPath) {
-        imagesPath = path.dirname(file.path)
+        imagesPath = file.dirname
       } else {
-        imagesPath = path.join(path.dirname(file.path), givenImagesPath)
+        imagesPath = path.join(file.dirname, givenImagesPath)
         if (path.resolve(givenImagesPath) === path.normalize(givenImagesPath)) {
           imagesPath = givenImagesPath
         }
