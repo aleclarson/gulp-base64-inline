@@ -1,84 +1,81 @@
-var { Transform } = require('stream')
-var path = require('path')
 var fs = require('fs')
-var PluginError = require('plugin-error')
+var url = require('url')
+var path = require('path')
 var mime = require('mime')
+var iconv = require('iconv-lite')
+var cheerio = require('cheerio')
+var PluginError = require('plugin-error')
+var { Transform } = require('stream')
 
-module.exports = (givenImagesPath, options) =>
+module.exports = base =>
   new Transform({
     objectMode: true,
     transform(file, _, done) {
-      var imagesPath
-      if (!givenImagesPath) {
-        imagesPath = file.dirname
-      } else {
-        imagesPath = path.join(file.dirname, givenImagesPath)
-        if (path.resolve(givenImagesPath) === path.normalize(givenImagesPath)) {
-          imagesPath = givenImagesPath
-        }
-      }
-
-      // Do nothing if no contents
-      if (file.isNull()) {
-        this.push(file)
-        return done(null)
-      }
-
-      if (file.isStream()) {
-        // accepting streams is optional
+      if (file.isStream())
         return done(
           new PluginError(
-            'gulp-inline-base64',
+            'gulp-base64-inline',
             'Stream content is not supported'
           )
         )
+
+      if (!file.isBuffer()) {
+        return done(null, file)
       }
 
-      function inline(inlineExpr, quotedPath) {
-        var imagePath = quotedPath.replace(/['"]/g, '')
+      var $ = parseHtml(file.contents)
+
+      $('img').each((i, el) => {
+        el = $(el)
+
+        var src = el.attr('src')
+        if (!isLocal(src)) {
+          return
+        }
+
+        var imagePath =
+          base && src[0] == '/' ? base + src : path.resolve(file.dirname, src)
+
         try {
-          var fileData = fs.readFileSync(path.join(imagesPath, imagePath))
+          var imageData = fs.readFileSync(imagePath)
         } catch (e) {
           return done(
             new PluginError(
-              'base64-inline',
-              'Referenced file not found: ' + path.join(imagesPath, imagePath)
+              'gulp-base64-inline',
+              'Referenced file not found: ' + imagePath
             )
           )
         }
 
-        var fileBase64 = Buffer.from(fileData).toString('base64')
-
-        var prefix = 'url('
-        var suffix = ')'
-        var includeMime = true
-
-        // has options
-        if (opts) {
-          if (opts.prefix !== undefined) prefix = opts.prefix
-          if (opts.suffix !== undefined) suffix = opts.suffix
-          if (opts.includeMime !== undefined) includeMime = opts.includeMime
-        }
-
-        //add Mime
-        if (includeMime) {
-          var fileMime = mime.lookup(imagePath)
-          prefix += 'data:' + fileMime + ';base64,'
-        }
-        return prefix + fileBase64 + suffix
-      }
-
-      // check if file.contents is a `Buffer`
-      if (file.isBuffer()) {
-        var base64 = String(file.contents).replace(
-          /inline\(([^\)]+)\)/g,
-          inline
+        el.attr(
+          'src',
+          'data:' +
+            mime.lookup(imagePath) +
+            ';base64,' +
+            imageData.toString('base64')
         )
-        file.contents = Buffer.from(base64)
+      })
 
-        this.push(file)
-      }
-
-      return done(null)
+      file.contents = iconv.encode($.html(), 'utf-8')
+      done(null, file)
     },
   })
+
+function isLocal(href) {
+  return href && !url.parse(href).hostname
+}
+
+function parseHtml(html) {
+  var decodedHtml = iconv.decode(html, 'utf-8')
+
+  if (~decodedHtml.indexOf('�')) {
+    decodedHtml = iconv.decode(html, 'gbk')
+    decodedHtml = iconv.encode(decodedHtml, 'utf-8')
+  }
+
+  return cheerio.load(decodedHtml, {
+    decodeEntities: false,
+    xmlMode: false,
+    lowerCaseAttributeNames: false,
+  })
+}
