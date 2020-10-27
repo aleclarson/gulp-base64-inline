@@ -2,8 +2,6 @@ var { Transform } = require('stream')
 var path = require('path')
 var fs = require('fs')
 var PluginError = require('plugin-error')
-var log = require('fancy-log')
-var AnsiColors = require('ansi-colors')
 var mime = require('mime')
 
 module.exports = (givenImagesPath, options) =>
@@ -43,12 +41,10 @@ module.exports = (givenImagesPath, options) =>
         try {
           var fileData = fs.readFileSync(path.join(imagesPath, imagePath))
         } catch (e) {
-          log(
-            AnsiColors.yellow('base64-inline'),
+          throw PluginError(
+            'base64-inline',
             'Referenced file not found: ' + path.join(imagesPath, imagePath)
           )
-          log(AnsiColors.yellow('base64-inline'), 'Leaving it as is.')
-          return inlineExpr
         }
 
         var fileBase64 = Buffer.from(fileData).toString('base64')
