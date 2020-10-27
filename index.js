@@ -26,14 +26,12 @@ module.exports = (givenImagesPath, options) =>
 
       if (file.isStream()) {
         // accepting streams is optional
-        this.emit(
-          'error',
+        return done(
           new PluginError(
             'gulp-inline-base64',
             'Stream content is not supported'
           )
         )
-        return done(null)
       }
 
       function inline(inlineExpr, quotedPath) {
@@ -41,9 +39,11 @@ module.exports = (givenImagesPath, options) =>
         try {
           var fileData = fs.readFileSync(path.join(imagesPath, imagePath))
         } catch (e) {
-          throw PluginError(
-            'base64-inline',
-            'Referenced file not found: ' + path.join(imagesPath, imagePath)
+          return done(
+            new PluginError(
+              'base64-inline',
+              'Referenced file not found: ' + path.join(imagesPath, imagePath)
+            )
           )
         }
 
